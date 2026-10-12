@@ -1,25 +1,36 @@
-                                                                      QUERY PLAN                                                                      
-------------------------------------------------------------------------------------------------------------------------------------------------------
- Incremental Sort  (cost=8371.59..10838.01 rows=35404 width=96) (actual time=399.997..525.778 rows=18290 loops=1)
+                                                                                              QUERY PLAN                                                                                              
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Incremental Sort  (cost=12939.10..16329.29 rows=47275 width=96) (actual time=30.480..35.527 rows=19924 loops=1)
    Sort Key: moving_avg.trip_day, (dense_rank() OVER (?))
    Presorted Key: moving_avg.trip_day
    Full-sort Groups: 46  Sort Method: quicksort  Average Memory: 29kB  Peak Memory: 29kB
-   Pre-sorted Groups: 46  Sort Method: quicksort  Average Memory: 42kB  Peak Memory: 42kB
-   ->  WindowAgg  (cost=8361.44..9069.52 rows=35404 width=96) (actual time=398.549..477.394 rows=18290 loops=1)
-         ->  Sort  (cost=8361.44..8449.95 rows=35404 width=88) (actual time=398.542..422.312 rows=18290 loops=1)
+   Pre-sorted Groups: 46  Sort Method: quicksort  Average Memory: 49kB  Peak Memory: 49kB
+   Buffers: shared hit=389
+   ->  WindowAgg  (cost=12925.05..13870.55 rows=47275 width=96) (actual time=30.384..33.851 rows=19924 loops=1)
+         Buffers: shared hit=386
+         ->  Sort  (cost=12925.05..13043.24 rows=47275 width=88) (actual time=30.382..30.837 rows=19924 loops=1)
                Sort Key: moving_avg.trip_day, moving_avg.moving_avg_7day DESC
-               Sort Method: quicksort  Memory: 1912kB
-               ->  Subquery Scan on moving_avg  (cost=3739.16..5686.38 rows=35404 width=88) (actual time=112.550..363.707 rows=18290 loops=1)
-                     ->  WindowAgg  (cost=3739.16..5332.34 rows=35404 width=88) (actual time=112.546..316.096 rows=18290 loops=1)
-                           ->  GroupAggregate  (cost=3739.16..4624.26 rows=35404 width=56) (actual time=112.518..242.072 rows=18290 loops=1)
+               Sort Method: quicksort  Memory: 2014kB
+               Buffers: shared hit=386
+               ->  Subquery Scan on moving_avg  (cost=8.23..6989.93 rows=47275 width=88) (actual time=0.063..24.604 rows=19924 loops=1)
+                     Buffers: shared hit=383
+                     ->  WindowAgg  (cost=8.23..6517.18 rows=47275 width=88) (actual time=0.062..23.713 rows=19924 loops=1)
+                           Buffers: shared hit=383
+                           ->  GroupAggregate  (cost=8.23..5571.68 rows=47275 width=56) (actual time=0.057..14.116 rows=19924 loops=1)
                                  Group Key: trips.vehicle_id, (date_trunc('day'::text, trips.created_at))
-                                 ->  Sort  (cost=3739.16..3827.67 rows=35404 width=30) (actual time=112.503..159.316 rows=35396 loops=1)
+                                 Buffers: shared hit=383
+                                 ->  Incremental Sort  (cost=8.23..4508.00 rows=47275 width=30) (actual time=0.053..8.969 rows=47254 loops=1)
                                        Sort Key: trips.vehicle_id, (date_trunc('day'::text, trips.created_at))
-                                       Sort Method: quicksort  Memory: 3165kB
-                                       ->  Seq Scan on trips  (cost=0.00..1064.10 rows=35404 width=30) (actual time=0.013..54.624 rows=35396 loops=1)
-                                             Filter: ((status)::text = 'COMPLETED'::text)
-                                             Rows Removed by Filter: 2561
- Planning Time: 0.551 ms
- Execution Time: 548.748 ms
-(21 rows)
+                                       Presorted Key: trips.vehicle_id
+                                       Full-sort Groups: 500  Sort Method: quicksort  Average Memory: 28kB  Peak Memory: 28kB
+                                       Pre-sorted Groups: 500  Sort Method: quicksort  Average Memory: 29kB  Peak Memory: 29kB
+                                       Buffers: shared hit=383
+                                       ->  Index Only Scan using idx_trips_completed_vehicle_created on trips  (cost=0.41..2355.73 rows=47275 width=30) (actual time=0.022..4.573 rows=47254 loops=1)
+                                             Heap Fetches: 0
+                                             Buffers: shared hit=380
+ Planning:
+   Buffers: shared hit=238
+ Planning Time: 0.271 ms
+ Execution Time: 36.012 ms
+(32 rows)
 

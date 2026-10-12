@@ -32,4 +32,12 @@ db.TelemetryPings.createIndex(
     { expireAfterSeconds: 7200, name: "ttl_created_at" }
 );
 
+// added in assignment 2 (see docs/handover_note.md): workflow 4 filters TripReviews by
+// vehicle_id and had no index for it, so every per-vehicle review query scanned the
+// whole collection.
+db.TripReviews.createIndex(
+    { vehicle_id: 1 },
+    { name: "idx_vehicle_id" }
+);
+
 print("collections + indexes created");

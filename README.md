@@ -3,7 +3,7 @@
 **Assignment 1, Project 2 — CS6.302 Software System Development**
 **Group 26** 
 
-GitHub: https://github.com/varun15103/Group26
+GitHub: https://github.com/kushlalve07/1_a2 (Assignment 2 fork; inherited from https://github.com/varun15103/Group26)
 
 RideSync is a ride-hailing database backend (Uber-style) with no frontend. It's a polyglot-persistence design:
 
@@ -87,7 +87,8 @@ performance/        EXPLAIN ANALYZE / explain("executionStats") output goes here
 **1. Clone and enter the repo.**
 
 ```bash
-git clone https://github.com/varun15103/Group26.git
+git clone https://github.com/kushlalve07/1_a2.git
+cd 1_a2
 ```
 
 **2. Create and activate the conda environment:**
@@ -97,6 +98,7 @@ conda create -n ridesync python=3.11 -y
 conda activate ridesync
 pip install -r requirements.txt
 ```
+No conda? A plain venv works the same: `python3.11 -m venv venv && source venv/bin/activate && pip install -r requirements.txt`.
 
 **3. Start Postgres and Mongo (Docker):**
 
@@ -144,9 +146,11 @@ export MONGO_DB=ridesync
    RIDESYNC_QUICK_SEED=1 python data_generation/mongo_seeder.py
 
    # full run, once you've confirmed it works
-   python data_generation/postgres_seeder.py
-   python data_generation/mongo_seeder.py
+   # --reset empties the tables/collections first, so the smoke-test rows don't mix in
+   python data_generation/postgres_seeder.py --reset
+   python data_generation/mongo_seeder.py --reset
    ```
+   Expected after the full run: 3,000 riders, 500 vehicles, 50,000 trips, about 110,000 `wallet_audit_logs` rows, 520,000 pings.
 
 5. **Analytics workflows** (only after seeding — there's nothing to query before that):
    ```bash
@@ -176,38 +180,82 @@ export MONGO_DB=ridesync
 
 ## PLANS
 
-**Workflow 2 — Postgres `EXPLAIN ANALYZE`:**
+Recaptured in Assignment 2 on the full seed (50,000 trips, 520,000 pings), after the index changes listed below. Raw output is in `performance/`.
+
+**Workflow 2 — Postgres `EXPLAIN (ANALYZE, BUFFERS)`:** index-only scan on `idx_trips_completed_vehicle_created`, no sequential scan on `trips`.
 ```
-                                                                      QUERY PLAN                                                                      
-------------------------------------------------------------------------------------------------------------------------------------------------------
- Incremental Sort  (cost=8371.59..10838.01 rows=35404 width=96) (actual time=399.997..525.778 rows=18290 loops=1)
+                                                                                              QUERY PLAN                                                                                              
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Incremental Sort  (cost=12939.10..16329.29 rows=47275 width=96) (actual time=30.480..35.527 rows=19924 loops=1)
    Sort Key: moving_avg.trip_day, (dense_rank() OVER (?))
    Presorted Key: moving_avg.trip_day
    Full-sort Groups: 46  Sort Method: quicksort  Average Memory: 29kB  Peak Memory: 29kB
-   Pre-sorted Groups: 46  Sort Method: quicksort  Average Memory: 42kB  Peak Memory: 42kB
-   ->  WindowAgg  (cost=8361.44..9069.52 rows=35404 width=96) (actual time=398.549..477.394 rows=18290 loops=1)
-         ->  Sort  (cost=8361.44..8449.95 rows=35404 width=88) (actual time=398.542..422.312 rows=18290 loops=1)
+   Pre-sorted Groups: 46  Sort Method: quicksort  Average Memory: 49kB  Peak Memory: 49kB
+   Buffers: shared hit=389
+   ->  WindowAgg  (cost=12925.05..13870.55 rows=47275 width=96) (actual time=30.384..33.851 rows=19924 loops=1)
+         Buffers: shared hit=386
+         ->  Sort  (cost=12925.05..13043.24 rows=47275 width=88) (actual time=30.382..30.837 rows=19924 loops=1)
                Sort Key: moving_avg.trip_day, moving_avg.moving_avg_7day DESC
-               Sort Method: quicksort  Memory: 1912kB
-               ->  Subquery Scan on moving_avg  (cost=3739.16..5686.38 rows=35404 width=88) (actual time=112.550..363.707 rows=18290 loops=1)
-                     ->  WindowAgg  (cost=3739.16..5332.34 rows=35404 width=88) (actual time=112.546..316.096 rows=18290 loops=1)
-                           ->  GroupAggregate  (cost=3739.16..4624.26 rows=35404 width=56) (actual time=112.518..242.072 rows=18290 loops=1)
+               Sort Method: quicksort  Memory: 2014kB
+               Buffers: shared hit=386
+               ->  Subquery Scan on moving_avg  (cost=8.23..6989.93 rows=47275 width=88) (actual time=0.063..24.604 rows=19924 loops=1)
+                     Buffers: shared hit=383
+                     ->  WindowAgg  (cost=8.23..6517.18 rows=47275 width=88) (actual time=0.062..23.713 rows=19924 loops=1)
+                           Buffers: shared hit=383
+                           ->  GroupAggregate  (cost=8.23..5571.68 rows=47275 width=56) (actual time=0.057..14.116 rows=19924 loops=1)
                                  Group Key: trips.vehicle_id, (date_trunc('day'::text, trips.created_at))
-                                 ->  Sort  (cost=3739.16..3827.67 rows=35404 width=30) (actual time=112.503..159.316 rows=35396 loops=1)
+                                 Buffers: shared hit=383
+                                 ->  Incremental Sort  (cost=8.23..4508.00 rows=47275 width=30) (actual time=0.053..8.969 rows=47254 loops=1)
                                        Sort Key: trips.vehicle_id, (date_trunc('day'::text, trips.created_at))
-                                       Sort Method: quicksort  Memory: 3165kB
-                                       ->  Seq Scan on trips  (cost=0.00..1064.10 rows=35404 width=30) (actual time=0.013..54.624 rows=35396 loops=1)
-                                             Filter: ((status)::text = 'COMPLETED'::text)
-                                             Rows Removed by Filter: 2561
- Planning Time: 0.551 ms
- Execution Time: 548.748 ms
-(21 rows)
+                                       Presorted Key: trips.vehicle_id
+                                       Full-sort Groups: 500  Sort Method: quicksort  Average Memory: 28kB  Peak Memory: 28kB
+                                       Pre-sorted Groups: 500  Sort Method: quicksort  Average Memory: 29kB  Peak Memory: 29kB
+                                       Buffers: shared hit=383
+                                       ->  Index Only Scan using idx_trips_completed_vehicle_created on trips  (cost=0.41..2355.73 rows=47275 width=30) (actual time=0.022..4.573 rows=47254 loops=1)
+                                             Heap Fetches: 0
+                                             Buffers: shared hit=380
+ Planning:
+   Buffers: shared hit=238
+ Planning Time: 0.271 ms
+ Execution Time: 36.012 ms
+(32 rows)
 ```
 
-**Workflow 3 — Mongo `explain("executionStats")`:**
-```
-{
-  "workflow3_geonear": null,
-  "workflow4_facet": null
-}
-```
+**Workflow 3 — Mongo `explain("executionStats")`** (`workflow3_geonear` in `performance/mongo_execution_stats.json`):
+
+| Field | Value |
+|---|---|
+| Winning plan | `GEO_NEAR_2DSPHERE` on index `geo_location` (no `COLLSCAN`) |
+| `nReturned` | 22,746 |
+| `totalKeysExamined` | 76,943 |
+| `totalDocsExamined` | 130,930 |
+| `executionTimeMillis` | 165 |
+
+**Workflow 4 — Mongo `explain("executionStats")`** (`workflow4_facet`, scoped to one vehicle):
+
+| Field | Value |
+|---|---|
+| Winning plan | `IXSCAN` on index `idx_vehicle_id`, then `FETCH` (no `COLLSCAN`) |
+| `nReturned` | 62 |
+| `totalKeysExamined` | 62 |
+| `totalDocsExamined` | 62 |
+| `executionTimeMillis` | 0 |
+
+Run fleet-wide (no `vehicle_id`), Workflow 4 reads every review, so a collection scan is expected there.
+
+---
+
+## Assignment 2: changes to the inherited scripts
+
+This repository was inherited for Assignment 2. Every change made to the Part A scripts is listed here. The reasons and the evidence are in [docs/handover_note.md](docs/handover_note.md). The API plan is in [docs/api_endpoints.md](docs/api_endpoints.md).
+
+| File | Change |
+|---|---|
+| `data_generation/postgres_seeder.py` | Top-ups run before trips; wallet updates no longer drop rows when a rider repeats in a batch; the trip loop runs until 50,000; open trips only use active vehicles; `--reset` flag; `ANALYZE` at the end |
+| `data_generation/mongo_seeder.py` | `--reset` flag |
+| `sql/02_indexes.sql` | Five new indexes (Workflow 2 covering index, trips by rider / vehicle / date, audit rows by rider and time) |
+| `sql/03_triggers_and_audit.sql` | `wallet_audit_logs` is now append-only (trigger blocks `UPDATE`/`DELETE`); audit timestamp uses `clock_timestamp()` |
+| `sql/04_stored_procedures.sql` | `book_trip` rejects a fare that is not above 0, an unknown vehicle and an inactive vehicle, each with its own SQLSTATE (`RS001`–`RS004`) |
+| `mongo/01_collections_and_indexes.js` | Index on `TripReviews.vehicle_id` |
+| `mongo/02_workflow3_geonear.js`, `mongo/03_workflow4_facet.js` | Results are printed; Workflow 4 runs fleet-wide unless a vehicle id is set |
+| `performance/*` | Both files recaptured (the Mongo file was `null`) |

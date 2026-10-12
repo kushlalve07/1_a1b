@@ -18,7 +18,8 @@ pings older than that would just get reaped by the TTL monitor before anyone
 could query them, which defeats the point of seeding them.
 
 Run:
-    python data_generation/mongo_seeder.py
+    python data_generation/mongo_seeder.py            # adds to whatever is there
+    python data_generation/mongo_seeder.py --reset    # empty the 3 collections first
 
 Env vars:
     MONGO_URI=mongodb://localhost:27017   MONGO_DB=ridesync
@@ -26,6 +27,7 @@ Env vars:
 """
 
 import os
+import sys
 import json
 import random
 from datetime import datetime, timedelta, timezone
@@ -166,6 +168,12 @@ def seed_telemetry_pings(db, vehicle_ids):
 def main():
     ids = load_ids()
     db = get_db()
+
+    if "--reset" in sys.argv[1:]:
+        # delete_many keeps the collections and their indexes (2dsphere, TTL, unique)
+        for name in ("VehicleMetadata", "TripReviews", "TelemetryPings"):
+            db[name].delete_many({})
+        print("emptied VehicleMetadata, TripReviews, TelemetryPings")
 
     seed_vehicle_metadata(db, ids["vehicle_ids"])
     seed_trip_reviews(db, ids["trips"])

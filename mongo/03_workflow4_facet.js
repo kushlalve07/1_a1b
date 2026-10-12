@@ -4,13 +4,15 @@
 //
 // Depends on: docs/mongo_schema_map.json shape for TripReviews (rating, tags[], vehicle_id).
 //
-// Scoped to a single vehicle by default since "review stats" is most useful per-vehicle;
-// drop the $match stage (or pass an empty {}) to run it fleet-wide instead.
+// (assignment 2) runs fleet-wide by default. it used to be scoped to a hardcoded
+// vehicle_id that is not in the seeded data, so all three facets came back empty.
+// set vehicleId to a real vehicles.id to scope it to one vehicle. the result is also
+// printed now: mongosh does not echo expression values when it runs a script file.
 
-const vehicleId = "c3a91f2e-6b14-4d08-9e7a-21b0c84d5f33"; // swap for a real vehicle_id
+const vehicleId = null; // e.g. "c3a91f2e-6b14-4d08-9e7a-21b0c84d5f33"
 
-db.TripReviews.aggregate([
-    { $match: { vehicle_id: vehicleId } },
+const reviewStats = db.TripReviews.aggregate([
+    { $match: vehicleId ? { vehicle_id: vehicleId } : {} },
     {
         $facet: {
             rating_distribution: [
@@ -36,4 +38,6 @@ db.TripReviews.aggregate([
             ]
         }
     }
-]);
+]).toArray();
+
+printjson(reviewStats);

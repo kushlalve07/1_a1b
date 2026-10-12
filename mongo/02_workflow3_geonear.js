@@ -10,7 +10,9 @@
 
 const riderLocation = { type: "Point", coordinates: [78.4867, 17.3850] };
 
-db.TelemetryPings.aggregate([
+// (assignment 2) the result is now printed. mongosh does not echo the value of an
+// expression when it runs a script file, so this script used to print nothing.
+const nearest = db.TelemetryPings.aggregate([
     {
         $geoNear: {
             near: riderLocation,
@@ -42,4 +44,6 @@ db.TelemetryPings.aggregate([
             created_at: 1
         }
     }
-]);
+]).toArray();
+
+printjson(nearest);

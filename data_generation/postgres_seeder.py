@@ -24,7 +24,8 @@ Constraints respected:
                                                     tracked in python before insert
 
 Run:
-    python data_generation/postgres_seeder.py
+    python data_generation/postgres_seeder.py            # adds to whatever is there
+    python data_generation/postgres_seeder.py --reset    # TRUNCATE the 4 tables first
 
 Env vars (all optional, defaults match the docker command in the README):
     PGHOST=localhost  PGPORT=5432  PGDATABASE=ridesync
@@ -33,6 +34,7 @@ Env vars (all optional, defaults match the docker command in the README):
 """
 
 import os
+import sys
 import uuid
 import random
 import json
@@ -122,7 +124,7 @@ def seed_vehicles(conn):
         )
     conn.commit()
     print(f"seeded {len(vehicles)} vehicles")
-    return [v[0] for v in vehicles]
+    return [v[0] for v in vehicles], [v[0] for v in vehicles if v[3]]
 
 
 def bulk_wallet_delta(cur, deltas, escrow=False):
@@ -135,16 +137,34 @@ def bulk_wallet_delta(cur, deltas, escrow=False):
         return
     if escrow:
         cur.execute("SET LOCAL ridesync.wallet_action_type = 'ESCROW'")
-    execute_values(
-        cur,
-        """
-        UPDATE riders AS r
-        SET wallet_balance = r.wallet_balance + v.delta::numeric
-        FROM (VALUES %s) AS v(rider_id, delta)
-        WHERE r.id = v.rider_id::uuid
-        """,
-        [(rid, str(delta)) for rid, delta in deltas],
-    )
+
+    # UPDATE ... FROM (VALUES ...) updates each target row at most once per
+    # statement: if the same rider appears twice in one VALUES list, postgres
+    # applies one of the deltas and silently drops the other (no audit row, and
+    # the db balance drifts away from the one tracked in python). So split the
+    # batch into rounds in which every rider appears at most once, keeping each
+    # rider's deltas in their original order.
+    rounds = []
+    seen_count = {}
+    for rid, delta in deltas:
+        n = seen_count.get(rid, 0)
+        seen_count[rid] = n + 1
+        if n == len(rounds):
+            rounds.append([])
+        rounds[n].append((rid, str(delta)))
+
+    for rows in rounds:
+        execute_values(
+            cur,
+            """
+            UPDATE riders AS r
+            SET wallet_balance = r.wallet_balance + v.delta::numeric
+            FROM (VALUES %s) AS v(rider_id, delta)
+            WHERE r.id = v.rider_id::uuid
+            """,
+            rows,
+            page_size=len(rows),
+        )
 
 
 def random_created_at():
@@ -152,7 +172,7 @@ def random_created_at():
     return datetime.now(timezone.utc) - timedelta(days=days_back)
 
 
-def seed_trips_and_escrow(conn, rider_ids, rider_balance, vehicle_ids):
+def seed_trips_and_escrow(conn, rider_ids, rider_balance, vehicle_ids, active_vehicle_ids):
     """Books NUM_TRIPS trips in batches. Each trip debits the rider's wallet
     (tagged ESCROW) in the same batch transaction the trip row is inserted in,
     mirroring what sql/04_stored_procedures.sql:book_trip does for a single
@@ -182,7 +202,9 @@ def seed_trips_and_escrow(conn, rider_ids, rider_balance, vehicle_ids):
         batch_deltas = []
 
     with conn.cursor() as cur:
-        for _ in range(NUM_TRIPS):
+        # loop until the target is reached (not a fixed NUM_TRIPS attempts), so the
+        # rare skipped attempt below can't leave us one short of 50,000
+        while inserted < NUM_TRIPS:
             # pick a rider that can actually take a new active trip if we roll
             # REQUESTED/IN_TRANSIT; for COMPLETED it doesn't matter
             rider_id = random.choice(rider_ids)
@@ -205,7 +227,12 @@ def seed_trips_and_escrow(conn, rider_ids, rider_balance, vehicle_ids):
                     continue  # near-zero balance, just skip this one
 
             trip_id = str(uuid.uuid4())
-            vehicle_id = random.choice(vehicle_ids)
+            # a trip that is still open has to be on a vehicle that is in the fleet;
+            # completed trips can be on a vehicle that was deactivated later
+            if status == "COMPLETED":
+                vehicle_id = random.choice(vehicle_ids)
+            else:
+                vehicle_id = random.choice(active_vehicle_ids)
             created_at = random_created_at()
 
             rider_balance[rider_id] = balance - fare
@@ -285,6 +312,25 @@ def seed_misc_debits(conn, rider_ids, rider_balance):
     print(f"seeded {applied} misc debits (DEBIT)")
 
 
+def reset_tables(conn):
+    # TRUNCATE is not blocked by the append-only trigger on wallet_audit_logs
+    # (that one is row-level, UPDATE/DELETE only), so this is the supported way
+    # to start over.
+    with conn.cursor() as cur:
+        cur.execute("TRUNCATE wallet_audit_logs, trips, riders, vehicles")
+    conn.commit()
+    print("truncated riders, vehicles, trips, wallet_audit_logs")
+
+
+def analyze_tables(conn):
+    # fresh planner stats, otherwise the first queries after a bulk load are
+    # planned as if the tables were still empty
+    with conn.cursor() as cur:
+        cur.execute("ANALYZE riders, vehicles, trips, wallet_audit_logs")
+    conn.commit()
+    print("analyzed tables")
+
+
 def refresh_materialized_view(conn):
     with conn.cursor() as cur:
         cur.execute("SELECT refresh_vehicle_trip_stats();")
@@ -305,14 +351,23 @@ def export_ids_for_mongo(rider_ids, vehicle_ids, trip_records):
 def main():
     conn = db_connect()
     try:
+        if "--reset" in sys.argv[1:]:
+            reset_tables(conn)
+
         rider_balance = seed_riders(conn)
         rider_ids = list(rider_balance.keys())
-        vehicle_ids = seed_vehicles(conn)
+        vehicle_ids, active_vehicle_ids = seed_vehicles(conn)
 
-        trip_records = seed_trips_and_escrow(conn, rider_ids, rider_balance, vehicle_ids)
+        # top-ups go first: 50k trips cost more than the riders' opening
+        # balances add up to, so booking before topping up left ~25% of the
+        # trips unaffordable and they were skipped.
         seed_topups(conn, rider_ids, rider_balance)
+        trip_records = seed_trips_and_escrow(
+            conn, rider_ids, rider_balance, vehicle_ids, active_vehicle_ids
+        )
         seed_misc_debits(conn, rider_ids, rider_balance)
 
+        analyze_tables(conn)
         refresh_materialized_view(conn)
         export_ids_for_mongo(rider_ids, vehicle_ids, trip_records)
 
