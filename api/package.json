@@ -1,0 +1,10 @@
+{
+  "name": "ridesync-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RideSync Assignment 2 API and static web server",
+  "main": "server.js",
+  "scripts": {"start":"node server.js", "dev":"node --watch server.js", "test":"node --test ../tests/*.test.js"},
+  "engines": {"node": ">=20"},
+  "dependencies": {"express":"^4.21.2", "helmet":"^8.0.0", "mongodb":"^6.12.0", "pg":"^8.13.1"}
+}
