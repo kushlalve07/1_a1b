@@ -4,7 +4,7 @@ Written for Assignment 2, Step 1. It covers what we ran, what worked, what did n
 
 ## How we ran it
 
-We followed the original README on macOS (Apple Silicon) with Docker: `postgres:16` and `mongo:7`, schema and Mongo scripts in the README's order, then the quick seed, then the full seed. The one deviation: we used a Python 3.11 `venv` instead of conda. `requirements.txt` is unpinned and resolved to Faker 40.43, psycopg2-binary 2.9.13 and pymongo 4.18.3.
+We used `postgres:16` and `mongo:7`, schema and Mongo scripts in the README's order, then the quick seed, then the full seed. The one deviation: we used a Python 3.11 `venv` instead of conda. `requirements.txt` is unpinned and resolved to Faker 40.43, psycopg2-binary 2.9.13 and pymongo 4.18.3.
 
 ## What worked
 
@@ -49,3 +49,11 @@ We followed the original README on macOS (Apple Silicon) with Docker: `postgres:
 1. Check the seeder's output against its targets. It printed `37426 (target 50000)` and the shortfall still shipped.
 2. Reconcile after seeding: `SUM(fare_amount)` against the audit debits would have exposed the dropped updates.
 3. 'wallet_audit_logs' table is insert-only, enforce it in the database.
+
+## Assignment 2 — frontend and API
+
+The Assignment 2 implementation adds `api/` and `web/` without replacing the inherited PostgreSQL/MongoDB workflows. The browser calls an Express API; SQL remains parameterized and the database procedures, triggers, views and Mongo pipelines remain the authoritative workflow logic. `docs/api_endpoints.md` describes the route contracts.
+
+The new UI includes Overview, Fleet & Trips, Book a Trip, Wallet Audit, Analytics, Live Map, and Reviews & Catalog. It uses bounded result pages, client-side loading/empty/error states, and responsive layouts. The map polls at five-second intervals and offers a telemetry simulator for a demo. Rider details include a demo wallet top-up action, which exercises the inherited wallet audit trigger.
+
+`sql/05_materialized_views.sql` now stores the last materialized-view refresh time in `mv_vehicle_trip_stats_refresh`; `sql/07_assignment2_refresh_timestamp.sql` is the compatibility migration for a database where the original materialized view was already created. Mongo collection creation is now safe to rerun. The implementation has syntax and static-contract tests, but a complete database-backed run must still be performed on the team's machine because the build environment used for this handover did not have Docker or access to the Node package registry.

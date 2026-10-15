@@ -1,9 +1,5 @@
 # API sketch: RideSync web app
 
-Written for Assignment 2, Step 1, before any UI work. It lists the endpoints the six screens need, with inputs and outputs. It is independent of the server framework we pick.
-
-The server stays thin. Each endpoint either runs a simple paged `SELECT`, or calls the Part A procedure, query, view or pipeline and returns the result as JSON.
-
 ## Endpoint list
 
 | # | Method and path | Screen | Backed by |
@@ -34,7 +30,7 @@ The server stays thin. Each endpoint either runs a simple paged `SELECT`, or cal
 
 | Input | Notes |
 | --- | --- |
-| `search` | optional, matches part of the name, case-insensitive |
+| `search` | optional, matches part of the rider name, case-insensitive |
 | `page`, `page_size` | default 1 and 20, `page_size` capped at 100 |
 
 ```json
@@ -80,6 +76,7 @@ Inputs: `search` (part of the licence plate), `class` (`MINI`, `SEDAN`, `SUV`, `
 
 | Input | Notes |
 | --- | --- |
+| `search` | optional, matches rider name, vehicle plate, or trip UUID substring |
 | `status` | optional: `REQUESTED`, `IN_TRANSIT`, `COMPLETED` |
 | `rider_id`, `vehicle_id` | optional filters |
 | `from`, `to` | optional dates on `created_at` |
@@ -298,15 +295,3 @@ flowchart LR
     E5 --> MG
     E16 -. plate and class .-> PG
 ```
-
-## Database work this sketch depends on
-
-Already done in Step 1 (see `handover_note.md`): the indexes behind endpoints 3, 6, 11, 12 and 18, the SQLSTATEs behind endpoint 8, and the append-only audit table.
-
-Still to do when the endpoints are built:
-
-| Endpoint | Needs |
-| --- | --- |
-| 14, 15 | A stored "last refreshed" time for the materialized view |
-| 11 | Seeded audit rows spread over past dates, so the date filter has something to filter |
-| 16, 17 | A ping simulator, and seeded pings that follow a path per vehicle instead of random points |

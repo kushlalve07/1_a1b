@@ -2,9 +2,10 @@
 // creates VehicleMetadata, TripReviews, TelemetryPings and the indexes the pdf asks for.
 // shapes match docs/mongo_schema_map.json. run with: mongosh ridesync mongo/01_collections_and_indexes.js
 
-db.createCollection("VehicleMetadata");
-db.createCollection("TripReviews");
-db.createCollection("TelemetryPings");
+// Idempotent setup: safe to run again after a partial initialization.
+for (const name of ["VehicleMetadata", "TripReviews", "TelemetryPings"]) {
+    if (!db.getCollectionNames().includes(name)) db.createCollection(name);
+}
 
 // one metadata doc per vehicle -> vehicle_id should be unique
 db.VehicleMetadata.createIndex(

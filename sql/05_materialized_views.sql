@@ -21,12 +21,22 @@ WITH DATA;
 CREATE UNIQUE INDEX idx_mv_vehicle_trip_stats_vehicle_id
     ON mv_vehicle_trip_stats (vehicle_id);
 
--- wrapper function so callers/cron don't need to remember the CONCURRENTLY keyword.
--- note: the view is created WITH DATA above (0 rows is fine) specifically so this works
--- the very first time it's called, before any seed data exists.
+-- Assignment 2 addition: retain the time at which the dashboard last refreshed the view.
+CREATE TABLE IF NOT EXISTS mv_vehicle_trip_stats_refresh (
+    id SMALLINT PRIMARY KEY CHECK (id = 1),
+    last_refreshed_at TIMESTAMPTZ NOT NULL
+);
+INSERT INTO mv_vehicle_trip_stats_refresh (id, last_refreshed_at)
+VALUES (1, clock_timestamp()) ON CONFLICT (id) DO NOTHING;
+
+-- Wrapper function: refresh the view and record the timestamp in the same call.
+-- CONCURRENTLY keeps readers available while PostgreSQL computes the replacement.
 CREATE OR REPLACE FUNCTION refresh_vehicle_trip_stats()
 RETURNS void AS $$
 BEGIN
     REFRESH MATERIALIZED VIEW CONCURRENTLY mv_vehicle_trip_stats;
+    INSERT INTO mv_vehicle_trip_stats_refresh (id, last_refreshed_at)
+    VALUES (1, clock_timestamp())
+    ON CONFLICT (id) DO UPDATE SET last_refreshed_at = EXCLUDED.last_refreshed_at;
 END;
 $$ LANGUAGE plpgsql;
