@@ -127,5 +127,5 @@ node --test tests/*.test.js
 |---|---|
 | Suhansh Varshney | Configured UI / UX and wireframes and documented README |
 | Samruddhi Shet | Configured docker for easy setup of project and UI / UX, frontend |
-| Kushl Alve | Setup API endpoints and created API endpoint, handover documentation |
-| Vishwanth Beereddy | Fixed inherited assignment 1 repo issues and setup API endpoints |
+| Kushl Alve | Created API endpoint, handover documentation and fixed issues from inherited repository |
+| Vishwanth Beereddy | Setup API endpoints and wrote implementation guide |
