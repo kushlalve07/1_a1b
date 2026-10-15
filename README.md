@@ -5,6 +5,9 @@
 
 RideSync is a restrained, responsive operations console for a ride-hailing platform. It retains the inherited Assignment 1 database and adds a browser UI and API for the four required workflows: atomic trip booking, window-function analytics, MongoDB `$geoNear`, and MongoDB `$facet`.
 
+## Demo Video link : 
+https://drive.google.com/file/d/1Nwln4lkgCkJ4mQAfVuoPj8Qakog7k3ko/view?usp=sharing
+
 ## What's included
 
 - `api/` — Express API, request validation, parameterized SQL, MongoDB aggregation, error mapping and Dockerfile.

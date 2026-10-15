@@ -1,4 +1,3 @@
-# venv and junk, dont zip these
 venv/
 __pycache__/
 .env
