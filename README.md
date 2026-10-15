@@ -8,6 +8,12 @@ RideSync is a restrained, responsive operations console for a ride-hailing platf
 ## Demo Video link : 
 https://drive.google.com/file/d/1Nwln4lkgCkJ4mQAfVuoPj8Qakog7k3ko/view?usp=sharing
 
+## Github Repo URL :
+https://github.com/kushlalve07/1_a1b
+
+## Final Commit Hash : 
+644aff383ad3b9e93ad5219dc4a7050c2f5f1419
+
 ## What's included
 
 - `api/` — Express API, request validation, parameterized SQL, MongoDB aggregation, error mapping and Dockerfile.
